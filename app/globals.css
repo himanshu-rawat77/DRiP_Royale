@@ -1,0 +1,109 @@
+@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --vault-bg: #0d0d10;
+  --arena-border: #2a2a32;
+  --accent: #7f46f0;
+  --accent-dim: #6b3bd4;
+  --danger: #ff3366;
+  --muted: #9eacc7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Rajdhani", sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* AvaxGods-style head text with violet accent bar */
+.head-text {
+  display: flex;
+  align-items: center;
+}
+
+.head-text::before {
+  content: "";
+  display: flex;
+  width: 4px;
+  height: 0.9em;
+  background: #7f46f0;
+  margin-right: 12px;
+}
+
+/* AvaxGods gameload (alias for glass-morphism) */
+.gameload {
+  background: rgba(127, 70, 240, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Glassmorphism effect (AvaxGods gameload style) */
+.glass-morphism {
+  background: rgba(127, 70, 240, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Battle card hover effect */
+.battle-card {
+  position: relative;
+  transition: 0.4s ease-out;
+  box-shadow: 0 7px 10px rgba(0, 0, 0, 0.5);
+}
+
+.battle-card:hover::before {
+  opacity: 1;
+}
+
+.battle-card:hover .info {
+  opacity: 1;
+}
+
+.battle-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 15px;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2;
+  transition: 0.5s;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.battle-card .info {
+  position: absolute;
+  z-index: 3;
+  color: #fff;
+  opacity: 0;
+  transition: 0.5s;
+}
+
+/* Accent glows */
+.glow-accent {
+  box-shadow: 0 0 20px rgba(127, 70, 240, 0.35);
+}
+
+.glow-danger {
+  box-shadow: 0 0 20px rgba(255, 51, 102, 0.2);
+}
