@@ -34,13 +34,13 @@ export default function PageLayout({
 
       <div className={styles.hocContentBox}>
         <Link href="/" className="block">
-          <Image
+          {/* <Image
             src={logo}
             alt="DRiP Royale"
             width={160}
             height={52}
             className={styles.hocLogo}
-          />
+          /> */}
         </Link>
 
         <div className={styles.hocBodyWrapper}>
@@ -66,9 +66,9 @@ export default function PageLayout({
           <Link href="/ledger" className={styles.footerText}>
             Ledger
           </Link>
-          <Link href="/battleground" className={styles.footerText}>
+          {/* <Link href="/battleground" className={styles.footerText}>
             Battleground
-          </Link>
+          </Link> */}
           <span className={styles.footerText}>Made with 💜 for DRiP Royale</span>
         </div>
       </div>

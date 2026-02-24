@@ -53,8 +53,8 @@ export async function getAssetsByOwner(
         page,
         limit,
         options: {
-          showUnverifiedCollections: false,
-          showCollectionMetadata: false,
+          showUnverifiedCollections: true,
+          showCollectionMetadata: true,
           showFungible: false,
           showNativeBalance: false,
         },
@@ -105,17 +105,23 @@ export function filterByDripCreator(
  * Map DAS asset to GameCard with power 2–10 (common scaling)
  */
 export function assetToGameCard(asset: DASAsset, power: number): GameCard {
-  const uri =
-    asset.content?.files?.[0]?.cdn_uri ??
-    asset.content?.files?.[0]?.uri ??
+  const content = asset.content as any;
+
+  const imageUri =
+    content?.links?.image ??
+    content?.files?.[0]?.cdn_uri ??
+    content?.files?.[0]?.uri ??
+    content?.metadata?.image ??
     "";
+
   return {
     assetId: asset.id,
-    imageUri: uri,
-    name: (asset.content as { metadata?: { name?: string } })?.metadata?.name,
+    imageUri,
+    name: content?.metadata?.name ?? "Unknown DRiP",
     power: Math.max(POWER_MIN, Math.min(POWER_MAX, power)),
   };
 }
+
 
 /**
  * Fetch wallet's DRiP assets and build cards for a deck.
