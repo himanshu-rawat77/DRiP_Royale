@@ -2,7 +2,7 @@
 
 > **War of Art on Solana** — turn collectible DRiP cNFTs into battle-ready decks and compete in winner-takes-all card matches.
 
-![Project Banner Placeholder](./docs/images/banner-placeholder.png)
+![Project Banner Placeholder](assets\Screenshot 2026-02-25 231313.png)
 
 ---
 
@@ -62,9 +62,9 @@ The project currently combines:
    - Track collected/lost assets.
    - Follow on-chain references via explorer links.
 
-![Vault Screen Placeholder](./docs/images/vault-placeholder.png)
-![Arena Screen Placeholder](./docs/images/arena-placeholder.png)
-![Ledger Screen Placeholder](./docs/images/ledger-placeholder.png)
+![Vault Screen Placeholder](assets\Screenshot 2026-02-25 231530.png)
+![Arena Screen Placeholder](assets\Screenshot 2026-02-25 231643.png)
+
 
 ---
 
