@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import type { LedgerEntry } from "@/lib/types";
 import { PageLayout, CustomButton } from "@/components/avax";
-import { readGameshiftUserFromStorage } from "@/lib/gameshiftSession";
+import { readWalletSessionFromStorage } from "@/lib/walletSession";
 
 const LEDGER_STORAGE_KEY = "dripRoyale:ledger";
 const PROFILE_STORAGE_KEY = "dripRoyale:playerProfiles";
@@ -22,11 +22,11 @@ export default function Ledger() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const user = readGameshiftUserFromStorage();
-      if (user) {
-        setProfileEmail(user.email ?? null);
-        setProfileWallet(user.walletAddress ?? user.address ?? null);
-        setReferenceId(user.referenceId ?? null);
+      const session = readWalletSessionFromStorage();
+      if (session) {
+        setProfileEmail(null);
+        setProfileWallet(session.walletAddress);
+        setReferenceId(session.walletAddress);
       }
       const rawProfiles = window.localStorage.getItem(PROFILE_STORAGE_KEY);
       if (rawProfiles) {
@@ -34,13 +34,13 @@ export default function Ledger() {
           string,
           { name?: string; avatarUrl?: string }
         >;
-        const key = user?.referenceId ?? "default";
+        const key = session?.walletAddress ?? "default";
         const storedProfile = parsed?.[key];
         if (storedProfile?.name) setDisplayName(storedProfile.name);
-        else if (user?.email) setDisplayName(user.email.split("@")[0]);
+        else if (session?.walletAddress) setDisplayName(`${session.walletAddress.slice(0, 4)}...`);
         if (storedProfile?.avatarUrl) setAvatarUrl(storedProfile.avatarUrl);
-      } else if (user?.email) {
-        setDisplayName(user.email.split("@")[0]);
+      } else if (session?.walletAddress) {
+        setDisplayName(`${session.walletAddress.slice(0, 4)}...`);
       }
     } catch {
       // ignore hydration errors
@@ -87,7 +87,7 @@ export default function Ledger() {
   return (
     <PageLayout
       title="Player Profile"
-      description="Your GameShift-linked player identity and DRiP Royale match history."
+      description="Your connected Solana wallet and DRiP Royale match history."
     >
       {/* Player card */}
       <div className="mb-8 rounded-2xl bg-black/60 border border-white/10 px-5 py-4 backdrop-blur-xl">
@@ -112,7 +112,7 @@ export default function Ledger() {
                 Connected player
               </p>
               <p className="text-xl font-rajdhani font-bold text-white">
-                {displayName || profileEmail || "No GameShift user connected"}
+                {displayName || profileEmail || "No wallet connected"}
               </p>
               {profileEmail && (
                 <p className="text-xs font-rajdhani text-siteWhite/70">{profileEmail}</p>

@@ -68,7 +68,7 @@ export default function Home() {
       href: "/ledger",
       label: "Profile",
       subtitle: "Player & History",
-      copy: "View your GameShift-linked player profile and DRiP Royale wins and losses.",
+      copy: "View your connected wallet profile and DRiP Royale wins and losses.",
       badge: "Profile",
       primary: false,
     },
