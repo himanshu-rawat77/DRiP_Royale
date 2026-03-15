@@ -42,7 +42,7 @@ export default function RootLayout({
                   href="/ledger"
                   className="px-3 py-1 rounded-full text-xs sm:text-sm font-rajdhani font-medium text-siteWhite/80 hover:text-white hover:bg-siteViolet/20 transition"
                 >
-                  Ledger
+                  Profile
                 </a>
                 <a
                   href="/create-room"

@@ -297,7 +297,16 @@ export default function Arena() {
     (mode: MatchMode) => {
       let playerDeck: GameCard[];
       let opponentDeck: GameCard[];
-      if (mode === "drip" && battleDeck && battleDeck.length >= MIN_DECK) {
+      if (mode === "drip") {
+        if (!battleDeck || battleDeck.length < MIN_DECK) {
+          setBattleAlert({
+            status: true,
+            type: "info",
+            message: `No Battle Deck found. Build one in the Vault with at least ${MIN_DECK} cards.`,
+          });
+          setTimeout(() => setBattleAlert(null), 2500);
+          return;
+        }
         playerDeck = battleDeck;
         opponentDeck = makeOpponentDeckFromPlayer(battleDeck);
       } else {

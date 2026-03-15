@@ -66,10 +66,10 @@ export default function Home() {
     },
     {
       href: "/ledger",
-      label: "The Ledger",
-      subtitle: "Match History",
-      copy: "Review previous matches and see which NFTs won or lost.",
-      badge: "History",
+      label: "Profile",
+      subtitle: "Player & History",
+      copy: "View your GameShift-linked player profile and DRiP Royale wins and losses.",
+      badge: "Profile",
       primary: false,
     },
   ];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 interface GameShiftUser {
   id: string;
@@ -11,6 +12,7 @@ interface GameShiftUser {
 }
 
 const STORAGE_KEY = "dripRoyale:gameshiftUser";
+const JUST_CREATED_KEY = "dripRoyale:gameshiftUserJustCreated";
 
 /**
  * GameShift Embedded Wallet connect.
@@ -24,10 +26,7 @@ export default function WalletConnect() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-
-  const hasGameShift =
-    typeof process.env.NEXT_PUBLIC_GAMESHIFT_API_KEY === "string" &&
-    process.env.NEXT_PUBLIC_GAMESHIFT_API_KEY.length > 0;
+  const router = useRouter();
 
   // Hydrate from localStorage so other pages can reuse the same GameShift user.
   useEffect(() => {
@@ -76,11 +75,14 @@ export default function WalletConnect() {
       if (typeof window !== "undefined") {
         try {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
+          window.localStorage.setItem(JUST_CREATED_KEY, "1");
         } catch {
           // ignore storage errors
         }
       }
       setShowForm(false);
+      // Navigate to Profile page on first successful connect in this session.
+      router.push("/ledger");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Connection failed");
     } finally {
@@ -96,13 +98,12 @@ export default function WalletConnect() {
     if (typeof window !== "undefined") {
       try {
         window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(JUST_CREATED_KEY);
       } catch {
         // ignore storage errors
       }
     }
   }, []);
-
-  if (!hasGameShift) return null;
 
   const address = user?.address ?? user?.walletAddress;
 
