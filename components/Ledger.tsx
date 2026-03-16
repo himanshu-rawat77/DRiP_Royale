@@ -26,7 +26,7 @@ export default function Ledger() {
   const [withdrawAddress, setWithdrawAddress] = useState<Record<string, string>>({});
   const [transferState, setTransferState] = useState<Record<string, string>>({});
 
-  const { walletAddress, getKeypair } = useEmbeddedWallet();
+  const { walletAddress, walletPublicKey, getKeypair } = useEmbeddedWallet();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -37,10 +37,10 @@ export default function Ledger() {
         const parsed = JSON.parse(rawProfiles) as Record<string, { name?: string; avatarUrl?: string }>;
         const storedProfile = parsed?.[key];
         if (storedProfile?.name) setDisplayName(storedProfile.name);
-        else if (walletAddress) setDisplayName(`Player ${walletAddress.slice(0, 4)}`);
+        else if (walletAddress) setDisplayName(`${walletAddress.slice(0, 4)}...`);
         if (storedProfile?.avatarUrl) setAvatarUrl(storedProfile.avatarUrl);
       } else if (walletAddress) {
-        setDisplayName(`Player ${walletAddress.slice(0, 4)}`);
+        setDisplayName(`${walletAddress.slice(0, 4)}...`);
       }
     } catch {
       // ignore hydration errors
@@ -69,14 +69,14 @@ export default function Ledger() {
         });
 
         if (!cancelled) {
-          const raw = window.localStorage.getItem(LEDGER_STORAGE_KEY);
+          const raw = typeof window !== "undefined" ? window.localStorage.getItem(LEDGER_STORAGE_KEY) : null;
           const localEntries = raw ? (JSON.parse(raw) as LedgerEntry[]) : [];
           const localByAsset = new Set(localEntries.map((entry) => entry.assetId));
           const merged = [...localEntries, ...onchainEntries.filter((entry) => !localByAsset.has(entry.assetId))];
           setEntries(merged);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && typeof window !== "undefined") {
           const raw = window.localStorage.getItem(LEDGER_STORAGE_KEY);
           if (raw) setEntries(JSON.parse(raw) as LedgerEntry[]);
         }
@@ -116,65 +116,41 @@ export default function Ledger() {
     }
 
     const keypair = getKeypair();
-    if (!keypair) {
+    if (!keypair || !walletPublicKey) {
       setTransferState((prev) => ({ ...prev, [entry.assetId]: "Connect your embedded wallet first." }));
       return;
     }
 
     try {
       const destinationKey = new PublicKey(destination);
-      setTransferState((prev) => ({ ...prev, [entry.assetId]: "Sending transfer..." }));
+      setTransferState((prev) => ({ ...prev, [entry.assetId]: "Sending..." }));
       const signature = await transferNft(keypair, destinationKey, entry.assetId);
-      setTransferState((prev) => ({
-        ...prev,
-        [entry.assetId]: `Sent successfully • ${signature.slice(0, 10)}...`,
-      }));
+      setTransferState((prev) => ({ ...prev, [entry.assetId]: `Sent: ${signature.slice(0, 10)}...` }));
     } catch {
-      setTransferState((prev) => ({ ...prev, [entry.assetId]: "Transfer failed. Check wallet address and try again." }));
+      setTransferState((prev) => ({ ...prev, [entry.assetId]: "Transfer failed." }));
     }
   };
 
   return (
-    <PageLayout
-      title="Player Profile"
-      description="Manage your identity, review your performance, and transfer won NFTs to any Solana wallet."
-    >
-      <div className="space-y-8">
-        <section className="relative overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-[#1f1136] via-[#101321] to-[#05131a] p-6 shadow-[0_0_50px_rgba(127,70,240,0.25)]">
-          <div className="pointer-events-none absolute -top-16 -right-12 h-48 w-48 rounded-full bg-siteViolet/30 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-cyan-500/20 blur-3xl" />
-
-          <div className="relative flex flex-wrap items-start justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="h-20 w-20 rounded-2xl overflow-hidden border border-white/25 bg-siteDimBlack flex items-center justify-center text-2xl font-bold">
-                {avatarUrl ? (
-                  <Image src={avatarUrl} alt="Player avatar" width={80} height={80} className="h-full w-full object-cover" unoptimized />
-                ) : (
-                  (displayName || walletAddress || "P").charAt(0).toUpperCase()
-                )}
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-siteWhite/60">Profile</p>
-                <h2 className="text-2xl font-bold text-white">{displayName || "Unnamed Challenger"}</h2>
-                <p className="mt-1 text-sm text-siteWhite/75" title={walletAddress ?? undefined}>
-                  {shortAddress(walletAddress)}
-                </p>
-              </div>
+    <PageLayout title="Player Profile" description="Embedded wallet profile and NFT ledger.">
+      <div className="mb-8 rounded-2xl bg-black/60 border border-white/10 px-5 py-4 backdrop-blur-xl">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-siteDimBlack border border-white/20 flex items-center justify-center text-lg font-rajdhani font-bold text-siteWhite">
+              {avatarUrl ? (
+                <Image src={avatarUrl} alt="Player avatar" width={56} height={56} className="object-cover w-full h-full" unoptimized />
+              ) : (
+                (displayName || walletAddress || "P").charAt(0).toUpperCase()
+              )}
             </div>
-
-            <div className="grid grid-cols-2 gap-3 min-w-[220px]">
-              <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wider text-emerald-300">Won</p>
-                <p className="text-xl font-bold text-white">{won.length}</p>
-              </div>
-              <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wider text-red-300">Lost</p>
-                <p className="text-xl font-bold text-white">{lost.length}</p>
-              </div>
+            <div>
+              <p className="text-xs font-rajdhani uppercase tracking-[0.2em] text-siteWhite/60">Connected player</p>
+              <p className="text-xl font-rajdhani font-bold text-white">{displayName || "No wallet connected"}</p>
             </div>
           </div>
-
-          <div className="relative mt-5 flex items-center gap-2">
+          <div className="text-right">
+            <p className="text-[11px] font-rajdhani uppercase tracking-wide text-siteWhite/60">Wallet</p>
+            <p className="text-sm font-rajdhani font-semibold text-white break-all">{walletAddress ?? "Not linked"}</p>
             <button
               type="button"
               onClick={() => setEditing((prev) => !prev)}
@@ -183,132 +159,92 @@ export default function Ledger() {
               {editing ? "Close editor" : "Edit profile"}
             </button>
           </div>
+        </div>
 
-          {editing && (
-            <div className="relative mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <div>
-                <label className="mb-1 block text-xs uppercase tracking-wide text-siteWhite/60">Display name</label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Enter a player name"
-                  className="w-full rounded-lg border border-white/20 bg-siteDimBlack px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-siteViolet"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs uppercase tracking-wide text-siteWhite/60">Avatar URL</label>
-                <input
-                  type="url"
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full rounded-lg border border-white/20 bg-siteDimBlack px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-siteViolet"
-                />
-              </div>
-              <div className="sm:col-span-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={saveProfile}
-                  className="rounded-lg bg-siteViolet px-4 py-2 text-xs font-semibold text-white hover:opacity-90"
-                >
-                  Save profile
-                </button>
-              </div>
+        {editing && (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm font-rajdhani text-siteWhite/80">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs uppercase tracking-wide text-siteWhite/60">Display name</label>
+              <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Enter a player name" className="px-3 py-2 rounded-md bg-siteDimBlack border border-white/20 text-white focus:ring-2 focus:ring-siteViolet focus:outline-none" />
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs uppercase tracking-wide text-siteWhite/60">Avatar image URL</label>
+              <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://..." className="px-3 py-2 rounded-md bg-siteDimBlack border border-white/20 text-white focus:ring-2 focus:ring-siteViolet focus:outline-none" />
+            </div>
+            <div className="sm:col-span-2 flex justify-end gap-2 mt-1">
+              <button type="button" onClick={saveProfile} className="px-4 py-2 rounded-lg bg-siteViolet text-white font-rajdhani font-semibold text-xs hover:opacity-90">Save profile</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {loadingAssets && <p className="font-rajdhani text-siteWhite/70 mb-4">Loading wallet NFTs from Helius...</p>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section>
+          <h2 className="font-rajdhani font-bold text-lg text-emerald-400 mb-3">Won NFTs</h2>
+          {won.length === 0 ? (
+            <p className="font-rajdhani text-sm text-siteWhite/70">Win a match in the Arena to see NFTs you&apos;ve won here.</p>
+          ) : (
+            <ul className="space-y-3">
+              {won.map((entry) => (
+                <li key={entry.id} className="p-4 rounded-xl glass-morphism border border-emerald-500/40">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 relative rounded-xl overflow-hidden flex-shrink-0 border-2 border-emerald-400/60">
+                      <Image src={entry.imageUri} alt={entry.name || entry.assetId.slice(0, 8)} fill className="object-cover" unoptimized />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-rajdhani font-bold text-white text-sm truncate">{entry.name || entry.assetId.slice(0, 12)}…</p>
+                      <p className="font-rajdhani text-xs text-siteWhite/70">{new Date(entry.timestamp).toLocaleString()}</p>
+                    </div>
+                    <a href={entry.solscanUrl} target="_blank" rel="noopener noreferrer">
+                      <CustomButton title="Solscan →" handleClick={() => {}} />
+                    </a>
+                  </div>
+                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      placeholder="Destination public key"
+                      value={withdrawAddress[entry.assetId] ?? ""}
+                      onChange={(e) => setWithdrawAddress((prev) => ({ ...prev, [entry.assetId]: e.target.value }))}
+                      className="flex-1 px-3 py-2 rounded-md bg-siteDimBlack border border-white/20 text-white focus:ring-2 focus:ring-siteViolet focus:outline-none text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleWithdraw(entry)}
+                      className="px-4 py-2 rounded-lg bg-siteViolet text-white font-rajdhani text-xs font-semibold"
+                    >
+                      Send to wallet
+                    </button>
+                  </div>
+                  {transferState[entry.assetId] && (
+                    <p className="mt-2 text-xs font-rajdhani text-siteWhite/70">{transferState[entry.assetId]}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </section>
 
-        {loadingAssets && (
-          <p className="text-sm text-siteWhite/70">Loading NFT inventory from Helius...</p>
-        )}
-
-        <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 rounded-2xl border border-emerald-500/25 bg-black/35 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-emerald-300">Won NFTs</h3>
-              <span className="text-xs text-siteWhite/60">Withdrawal available here</span>
-            </div>
-
-            {won.length === 0 ? (
-              <p className="text-sm text-siteWhite/70">You have no won NFTs yet. Win an Arena match to unlock transfer actions.</p>
-            ) : (
-              <ul className="space-y-3">
-                {won.map((entry) => (
-                  <li key={entry.id} className="rounded-xl border border-white/10 bg-black/35 p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-emerald-400/40">
-                        <Image
-                          src={entry.imageUri || "/assets/logo.svg"}
-                          alt={entry.name || entry.assetId.slice(0, 8)}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold text-white">{entry.name || entry.assetId}</p>
-                        <p className="text-xs text-siteWhite/65">{new Date(entry.timestamp).toLocaleString()}</p>
-                      </div>
-                      <a href={entry.solscanUrl} target="_blank" rel="noopener noreferrer">
-                        <CustomButton title="Solscan →" handleClick={() => {}} />
-                      </a>
-                    </div>
-
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <input
-                        type="text"
-                        placeholder="Destination wallet public key"
-                        value={withdrawAddress[entry.assetId] ?? ""}
-                        onChange={(e) =>
-                          setWithdrawAddress((prev) => ({ ...prev, [entry.assetId]: e.target.value }))
-                        }
-                        className="flex-1 rounded-lg border border-white/20 bg-siteDimBlack px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-siteViolet"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void handleWithdraw(entry)}
-                        className="rounded-lg bg-siteViolet px-4 py-2 text-xs font-semibold text-white hover:opacity-90"
-                      >
-                        Send to wallet
-                      </button>
-                    </div>
-
-                    {transferState[entry.assetId] && (
-                      <p className="mt-2 text-xs text-siteWhite/75">{transferState[entry.assetId]}</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-white/15 bg-black/35 p-5">
-            <h3 className="mb-4 text-lg font-bold text-red-300">Lost NFTs</h3>
-            {lost.length === 0 ? (
-              <p className="text-sm text-siteWhite/70">No lost NFT entries yet. Keep your winning streak alive.</p>
-            ) : (
-              <ul className="space-y-3">
-                {lost.map((entry) => (
-                  <li key={entry.id} className="flex items-center gap-3 rounded-xl border border-red-500/25 bg-black/35 p-3">
-                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-red-500/40">
-                      <Image
-                        src={entry.imageUri || "/assets/logo.svg"}
-                        alt={entry.name || entry.assetId.slice(0, 8)}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">{entry.name || entry.assetId}</p>
-                      <p className="text-xs text-siteWhite/65">{new Date(entry.timestamp).toLocaleString()}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        <section>
+          <h2 className="font-rajdhani font-bold text-lg text-danger mb-3">Lost NFTs</h2>
+          {lost.length === 0 ? (
+            <p className="font-rajdhani text-sm text-siteWhite/70">NFTs you lose in matches will appear here for reference.</p>
+          ) : (
+            <ul className="space-y-3">
+              {lost.map((entry) => (
+                <li key={entry.id} className="flex items-center gap-4 p-4 rounded-xl glass-morphism border border-danger/40">
+                  <div className="w-14 h-14 relative rounded-xl overflow-hidden flex-shrink-0 border-2 border-danger/60">
+                    <Image src={entry.imageUri} alt={entry.name || entry.assetId.slice(0, 8)} fill className="object-cover" unoptimized />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-rajdhani font-bold text-white text-sm truncate">{entry.name || entry.assetId.slice(0, 12)}…</p>
+                    <p className="font-rajdhani text-xs text-siteWhite/70">{new Date(entry.timestamp).toLocaleString()}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </PageLayout>
