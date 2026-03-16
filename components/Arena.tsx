@@ -681,18 +681,16 @@ export default function Arena() {
 
         {/* Center: Cards + Action (Battle.jsx middle) */}
         <div className={`${styles.flexCenter} flex-col my-4 flex-1 min-h-0 w-full max-w-full`}>
-          {gameOver && (
+          {winnerLabel && (
             <div className="mb-2 sm:mb-3 flex flex-col items-center gap-2">
-              {winnerLabel && (
-                <motion.p
-                  className="font-rajdhani font-bold text-2xl text-siteViolet glow-accent text-center"
-                  variants={fadeInUp}
-                  initial="initial"
-                  animate="animate"
-                >
-                  {winnerLabel} win{winnerLabel === "You" ? "" : "s"}!
-                </motion.p>
-              )}
+              <motion.p
+                className="font-rajdhani font-bold text-2xl text-siteViolet glow-accent text-center"
+                variants={fadeInUp}
+                initial="initial"
+                animate="animate"
+              >
+                {winnerLabel} win{winnerLabel === "You" ? "" : "s"}!
+              </motion.p>
               <div className="flex items-center gap-2">
                 <Link
                   href="/ledger"
