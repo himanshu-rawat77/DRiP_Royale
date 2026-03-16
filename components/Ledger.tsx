@@ -12,6 +12,11 @@ import { transferNft } from "@/lib/nftTransfer";
 const LEDGER_STORAGE_KEY = "dripRoyale:ledger";
 const PROFILE_STORAGE_KEY = "dripRoyale:playerProfiles";
 
+function shortAddress(address?: string | null) {
+  if (!address) return "Not linked";
+  return `${address.slice(0, 6)}...${address.slice(-6)}`;
+}
+
 export default function Ledger() {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [displayName, setDisplayName] = useState<string>("");
@@ -149,9 +154,9 @@ export default function Ledger() {
             <button
               type="button"
               onClick={() => setEditing((prev) => !prev)}
-              className="mt-2 px-3 py-1 rounded-full border border-white/20 text-[11px] font-rajdhani text-siteWhite/80 hover:border-siteViolet/60 hover:text-white transition"
+              className="rounded-lg border border-white/25 px-4 py-2 text-xs font-semibold text-siteWhite hover:border-siteViolet/60 hover:text-white transition"
             >
-              {editing ? "Cancel" : "Edit profile"}
+              {editing ? "Close editor" : "Edit profile"}
             </button>
           </div>
         </div>
