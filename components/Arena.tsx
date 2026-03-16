@@ -15,6 +15,8 @@ import { CustomButton, GameInfo, Alert } from "@/components/avax";
 import { player01, player02, allCards, battlegrounds, attack } from "@/lib/avaxAssets";
 import { styles } from "@/lib/avaxStyles";
 import { fadeInUp, cardFlipEnter } from "@/lib/motionPresets";
+import { useEmbeddedWallet } from "@/components/providers/EmbeddedWalletProvider";
+import { transferNft } from "@/lib/nftTransfer";
 
 const BATTLEGROUND_BG: Record<string, string> = {
   "bg-saiman": "bg-saiman",
@@ -25,8 +27,8 @@ const BATTLEGROUND_BG: Record<string, string> = {
 
 const DECK_STORAGE_KEY = "dripRoyale:battleDeck";
 const WALLET_STORAGE_KEY = "dripRoyale:wallet";
-const GAMESHIFT_USER_KEY = "dripRoyale:gameshiftUser";
 const LEDGER_STORAGE_KEY = "dripRoyale:ledger";
+const TEST_NFT_MINT = process.env.NEXT_PUBLIC_TEST_NFT_MINT ?? "test-nft-mint";
 
 const MIN_DECK = 5;
 
@@ -38,14 +40,6 @@ interface MatchMeta {
   playerDeck: GameCard[];
   opponentDeck: GameCard[];
   roomId?: string;
-}
-
-interface GameShiftUser {
-  id: string;
-  address?: string;
-  walletAddress?: string;
-  email?: string;
-  referenceId?: string;
 }
 
 type RoomRole = "host" | "guest" | "spectator" | null;
@@ -134,7 +128,6 @@ export default function Arena() {
   const [flipLock, setFlipLock] = useState(false);
   const [battleDeck, setBattleDeck] = useState<GameCard[] | null>(null);
   const [wallet, setWallet] = useState<string | null>(null);
-  const [gameshiftUser, setGameshiftUser] = useState<GameShiftUser | null>(null);
   const [matchMeta, setMatchMeta] = useState<MatchMeta | null>(null);
   const [matchSettled, setMatchSettled] = useState(false);
   const [roomRole, setRoomRole] = useState<RoomRole>(null);
@@ -150,13 +143,14 @@ export default function Arena() {
   const [battlegroundBg, setBattlegroundBg] = useState<string>("bg-astral");
   const settleInProgressRef = useRef(false);
   const roomSocketRef = useRef<WebSocket | null>(null);
+  const { getKeypair, walletPublicKey } = useEmbeddedWallet();
 
   const searchParams = useSearchParams();
   const urlMode = searchParams.get("mode");
   const roomIdFromUrl = searchParams.get("room") ?? undefined;
   const isRoomMode = urlMode === "room" && !!roomIdFromUrl;
 
-  // Hydrate stored deck, wallet, and GameShift user on mount.
+  // Hydrate stored deck + wallet on mount.
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -169,11 +163,6 @@ export default function Arena() {
       }
       const storedWallet = window.localStorage.getItem(WALLET_STORAGE_KEY);
       if (storedWallet) setWallet(storedWallet);
-      const gsRaw = window.localStorage.getItem(GAMESHIFT_USER_KEY);
-      if (gsRaw) {
-        const gs = JSON.parse(gsRaw) as GameShiftUser;
-        if (gs && gs.id) setGameshiftUser(gs);
-      }
     } catch {
       // ignore hydration errors
     }
@@ -362,64 +351,30 @@ export default function Arena() {
     [battleDeck, matchMeta]
   );
 
-  const maybeSettleWithGameShift = useCallback(
-    async (winner: "player" | "opponent" | null) => {
-      if (winner !== "player") return null;
-      if (!gameshiftUser?.referenceId) return null;
+  const maybeSettleLocally = useCallback(async (winner: "player" | "opponent" | null) => {
+    if (winner !== "player") return null;
+    const loserKeypair = getKeypair();
+    if (!loserKeypair || !walletPublicKey) return null;
 
-      const rewardIdsRaw =
-        typeof process.env.NEXT_PUBLIC_GAMESHIFT_REWARD_ITEM_IDS === "string"
-          ? process.env.NEXT_PUBLIC_GAMESHIFT_REWARD_ITEM_IDS
-          : "";
-      const rewardIds = rewardIdsRaw
-        .split(",")
-        .map((id) => id.trim())
-        .filter(Boolean);
-      if (rewardIds.length === 0) return null;
-
-      try {
-        const res = await fetch("/api/match/settle", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            winnerReferenceId: gameshiftUser.referenceId,
-            loserReferenceId: "opponent",
-            wonItemIds: rewardIds,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          // Surface as info alert but don't break the game flow.
-          setBattleAlert({
-            status: true,
-            type: "failure",
-            message: data.error || "GameShift settlement failed",
-          });
-          setTimeout(() => setBattleAlert(null), 2000);
-          return null;
-        }
-        const txs = (data?.txSignatures as string[]) || [];
-        if (txs.length > 0) {
-          setBattleAlert({
-            status: true,
-            type: "success",
-            message: "Match settled via GameShift. Rewards sent to your embedded wallet.",
-          });
-          setTimeout(() => setBattleAlert(null), 2500);
-        }
-        return txs[0] ?? null;
-      } catch {
-        setBattleAlert({
-          status: true,
-          type: "failure",
-          message: "GameShift settlement failed",
-        });
-        setTimeout(() => setBattleAlert(null), 2000);
-        return null;
-      }
-    },
-    [gameshiftUser]
-  );
+    try {
+      const txSig = await transferNft(loserKeypair, walletPublicKey, TEST_NFT_MINT);
+      setBattleAlert({
+        status: true,
+        type: "success",
+        message: "Match settled with local embedded wallet transfer.",
+      });
+      setTimeout(() => setBattleAlert(null), 2500);
+      return txSig;
+    } catch {
+      setBattleAlert({
+        status: true,
+        type: "failure",
+        message: "Embedded wallet settlement failed on devnet.",
+      });
+      setTimeout(() => setBattleAlert(null), 2000);
+      return null;
+    }
+  }, [getKeypair, walletPublicKey]);
 
   const handleMatchEnd = useCallback(
     async (state: ReturnType<typeof createGameState>) => {
@@ -429,11 +384,11 @@ export default function Arena() {
       const winner: "player" | "opponent" | null =
         status === "player_wins" ? "player" : status === "opponent_wins" ? "opponent" : null;
 
-      const txSig = await maybeSettleWithGameShift(winner);
+      const txSig = await maybeSettleLocally(winner);
       persistToLedger(state, winner, txSig ?? undefined);
       setMatchSettled(true);
     },
-    [matchSettled, maybeSettleWithGameShift, persistToLedger]
+    [matchSettled, maybeSettleLocally, persistToLedger]
   );
 
   const startRoomMatch = useCallback(() => {
@@ -727,14 +682,30 @@ export default function Arena() {
         {/* Center: Cards + Action (Battle.jsx middle) */}
         <div className={`${styles.flexCenter} flex-col my-4 flex-1 min-h-0 w-full max-w-full`}>
           {winnerLabel && (
-            <motion.p
-              className="font-rajdhani font-bold text-2xl text-siteViolet mb-2 sm:mb-3 glow-accent text-center"
-              variants={fadeInUp}
-              initial="initial"
-              animate="animate"
-            >
-              {winnerLabel} win{winnerLabel === "You" ? "" : "s"}!
-            </motion.p>
+            <div className="mb-2 sm:mb-3 flex flex-col items-center gap-2">
+              <motion.p
+                className="font-rajdhani font-bold text-2xl text-siteViolet glow-accent text-center"
+                variants={fadeInUp}
+                initial="initial"
+                animate="animate"
+              >
+                {winnerLabel} win{winnerLabel === "You" ? "" : "s"}!
+              </motion.p>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/ledger"
+                  className="px-3 py-1.5 rounded-lg bg-siteViolet text-white text-xs font-rajdhani font-semibold"
+                >
+                  Go to Profile
+                </Link>
+                <Link
+                  href="/arena"
+                  className="px-3 py-1.5 rounded-lg border border-white/30 text-siteWhite text-xs font-rajdhani font-semibold"
+                >
+                  Back to Arena
+                </Link>
+              </div>
+            </div>
           )}
 
           {/* Status strip */}
