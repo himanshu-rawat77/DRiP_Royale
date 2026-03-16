@@ -2,114 +2,107 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import {
+  clearWalletSessionFromStorage,
+  getWalletSessionStorageKey,
+  readWalletSessionFromStorage,
+  type WalletSession,
+} from "@/lib/walletSession";
 
-interface GameShiftUser {
-  id: string;
-  address?: string;
-  walletAddress?: string;
-  email?: string;
-  referenceId?: string;
+type SolanaProvider = {
+  isPhantom?: boolean;
+  publicKey?: { toString: () => string };
+  connect: () => Promise<void>;
+  signMessage: (
+    message: Uint8Array,
+    display?: "hex" | "utf8"
+  ) => Promise<{ signature: Uint8Array } | Uint8Array>;
+};
+
+function getProvider(): SolanaProvider | null {
+  if (typeof window === "undefined") return null;
+  return (window as Window & { solana?: SolanaProvider }).solana ?? null;
 }
 
-const STORAGE_KEY = "dripRoyale:gameshiftUser";
-const JUST_CREATED_KEY = "dripRoyale:gameshiftUserJustCreated";
-
-/**
- * GameShift Embedded Wallet connect.
- * Create/get user by email; show wallet address when connected.
- * The connected user is also stored in localStorage so Arena / Ledger
- * can read the referenceId for settlement flows.
- */
 export default function WalletConnect() {
-  const [user, setUser] = useState<GameShiftUser | null>(null);
-  const [email, setEmail] = useState("");
+  const [session, setSession] = useState<WalletSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
   const router = useRouter();
 
-  // Hydrate from localStorage so other pages can reuse the same GameShift user.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const stored = JSON.parse(raw) as GameShiftUser | null;
-      if (stored && stored.id) {
-        setUser(stored);
-        if (stored.email) setEmail(stored.email);
-      }
-    } catch {
-      // ignore hydration errors
-    }
+    const stored = readWalletSessionFromStorage();
+    if (stored) setSession(stored);
   }, []);
 
   const connect = useCallback(async () => {
-    if (!email.trim()) {
-      setError("Enter your email");
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
-      const trimmed = email.trim();
-      const referenceId = trimmed.toLowerCase().replace(/\s+/g, "-").slice(0, 64);
-      const res = await fetch("/api/gameshift/user", {
+      const provider = getProvider();
+      if (!provider) {
+        throw new Error("No Solana wallet found. Install Phantom or compatible wallet.");
+      }
+
+      await provider.connect();
+      const walletAddress = provider.publicKey?.toString();
+      if (!walletAddress) throw new Error("Unable to read wallet address");
+
+      const nonceRes = await fetch("/api/auth/nonce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress }),
+      });
+      const nonceData = await nonceRes.json();
+      if (!nonceRes.ok) throw new Error(nonceData.error || "Failed to create auth challenge");
+
+      const message = new TextEncoder().encode(nonceData.message as string);
+      const signed = await provider.signMessage(message, "utf8");
+      const signatureBytes = signed instanceof Uint8Array ? signed : signed.signature;
+      const signature = btoa(String.fromCharCode(...Array.from(signatureBytes)));
+
+      const verifyRes = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: trimmed,
-          referenceId,
+          walletAddress,
+          nonce: nonceData.nonce,
+          issuedAt: nonceData.issuedAt,
+          challenge: nonceData.challenge,
+          signature,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to connect");
-      const nextUser: GameShiftUser = {
-        id: data.id,
-        address: data.address ?? data.walletAddress,
-        walletAddress: data.walletAddress ?? data.address,
-        email: data.email ?? trimmed,
-        referenceId: data.referenceId ?? referenceId,
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok) throw new Error(verifyData.error || "Wallet verification failed");
+
+      const nextSession: WalletSession = {
+        walletAddress,
+        nonce: nonceData.nonce,
+        issuedAt: nonceData.issuedAt,
+        signature,
       };
-      setUser(nextUser);
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
-          window.localStorage.setItem(JUST_CREATED_KEY, "1");
-        } catch {
-          // ignore storage errors
-        }
-      }
-      setShowForm(false);
-      // Navigate to Profile page on first successful connect in this session.
+      setSession(nextSession);
+      window.localStorage.setItem(getWalletSessionStorageKey(), JSON.stringify(nextSession));
+      window.localStorage.setItem("dripRoyale:wallet", walletAddress);
       router.push("/ledger");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Connection failed");
     } finally {
       setLoading(false);
     }
-  }, [email]);
+  }, [router]);
 
   const disconnect = useCallback(() => {
-    setUser(null);
-    setEmail("");
+    setSession(null);
     setError(null);
-    setShowForm(false);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.removeItem(STORAGE_KEY);
-        window.localStorage.removeItem(JUST_CREATED_KEY);
-      } catch {
-        // ignore storage errors
-      }
-    }
+    clearWalletSessionFromStorage();
   }, []);
 
-  const address = user?.address ?? user?.walletAddress;
+  const address = session?.walletAddress;
 
   return (
     <div className="flex items-center gap-3">
-      {user && address ? (
+      {address ? (
         <>
           <span
             className="max-w-[120px] truncate font-rajdhani font-medium text-siteWhite text-sm"
@@ -125,48 +118,22 @@ export default function WalletConnect() {
             Disconnect
           </button>
         </>
-      ) : showForm ? (
+      ) : (
         <div className="flex flex-col gap-2 items-end">
-          <input
-            type="email"
-            placeholder="Email (GameShift wallet)"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && connect()}
-            className="w-52 px-4 py-2 rounded-md bg-siteDimBlack border border-white/20 text-white font-rajdhani placeholder-siteWhite/50 focus:ring-2 focus:ring-siteViolet focus:outline-none"
-            autoFocus
-          />
           {error && (
             <p className="text-danger font-rajdhani font-medium text-xs w-full text-right">
               {error}
             </p>
           )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="px-4 py-2 rounded-lg bg-siteDimBlack border border-white/20 text-siteWhite font-rajdhani font-semibold text-sm hover:border-siteViolet/50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={connect}
-              disabled={loading}
-              className="px-4 py-2 rounded-lg bg-siteViolet text-white font-rajdhani font-bold text-sm hover:opacity-90 disabled:opacity-50"
-            >
-              {loading ? "Connecting…" : "Connect"}
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={connect}
+            className="px-5 py-2 rounded-lg bg-siteViolet text-white font-rajdhani font-semibold text-sm hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? "Connecting…" : "Connect Wallet"}
+          </button>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setShowForm(true)}
-          className="px-5 py-2.5 rounded-lg bg-siteViolet text-white font-rajdhani font-bold text-sm hover:opacity-90"
-        >
-          Connect (GameShift)
-        </button>
       )}
     </div>
   );

@@ -212,6 +212,10 @@ Recommended production baseline:
 
 ---
 
+## Migration Notes
+
+- GameShift removal and Solana-native migration guide: `docs/gameshift-removal-plan.md`
+
 ## Roadmap
 
 - Matchmaking + multiplayer session orchestration.
